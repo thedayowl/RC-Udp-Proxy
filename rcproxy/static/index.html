@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RC UDP Proxy</title>
+<style>
+:root {
+  --bg: #f5f6f8; --panel: #fff; --text: #1d2330; --muted: #6b7385; --border: #dfe3ea;
+  --accent: #0b6bcb; --accent-ink: #fff; --ok: #1f8a4c; --warn: #b7791f; --bad: #c53030;
+  --ok-bg: #e6f4ec; --warn-bg: #fdf3e1; --bad-bg: #fbeaea; --idle-bg: #eef0f4;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14171d; --panel: #1c2028; --text: #e4e7ee; --muted: #949cad; --border: #2e3440;
+    --accent: #4c9ef0; --accent-ink: #0b1220; --ok: #4cc283; --warn: #e0a84a; --bad: #f07272;
+    --ok-bg: #173325; --warn-bg: #3a2e16; --bad-bg: #3d1d1d; --idle-bg: #262b35; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+header { background: var(--panel); border-bottom: 1px solid var(--border); padding: 0 20px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 14px 0; font-weight: 650; }
+header h1 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+nav { display: flex; gap: 4px; }
+nav button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 15px 12px 13px; font: inherit; color: var(--muted); cursor: pointer; }
+nav button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+main { padding: 20px; max-width: 1300px; margin: 0 auto; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
+.toolbar h2 { font-size: 15px; margin: 0; }
+.hint { color: var(--muted); font-size: 13px; }
+button.btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 6px; padding: 7px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+button.btn.secondary { background: var(--idle-bg); color: var(--text); font-weight: 500; }
+button.btn.danger { background: var(--bad); color: #fff; }
+button.btn.small { padding: 4px 10px; font-size: 13px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td .sub { color: var(--muted); font-size: 12px; }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+.pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+.pill.idle { background: var(--idle-bg); color: var(--muted); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.empty { text-align: center; color: var(--muted); padding: 30px; }
+.banner { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-weight: 500; }
+dialog { border: 1px solid var(--border); border-radius: 10px; padding: 0; background: var(--panel); color: var(--text); width: min(720px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+dialog form { padding: 20px; }
+dialog h3 { margin: 0 0 14px; }
+fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 14px; padding: 12px 14px; }
+legend { font-weight: 600; padding: 0 6px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 14px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 500; }
+label.check { flex-direction: row; align-items: center; gap: 8px; }
+label .hint { font-weight: 400; font-size: 12px; }
+input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.error { color: var(--bad); margin: 8px 0; min-height: 1em; }
+#logs { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 70vh; overflow-y: auto; background: var(--bg); border-radius: 6px; padding: 10px; }
+#logs .WARNING { color: var(--warn); } #logs .ERROR { color: var(--bad); } #logs .DEBUG { color: var(--muted); }
+.phonecfg { font-family: var(--mono); font-size: 12px; background: var(--bg); padding: 8px 10px; border-radius: 6px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>RC UDP Proxy <small id="ver"></small></h1>
+  <nav>
+    <button data-tab="endpoints" class="active">Endpoints</button>
+    <button data-tab="calls">Calls</button>
+    <button data-tab="settings">Settings</button>
+    <button data-tab="logs">Logs</button>
+  </nav>
+</header>
+<main>
+  <div id="pwbanner" class="banner" hidden>The web UI is using the default password. Change it under Settings.</div>
+
+  <section id="tab-endpoints">
+    <div class="panel">
+      <div class="toolbar">
+        <div><h2>Endpoints</h2><div class="hint" id="phonehint"></div></div>
+        <button class="btn" id="addBtn">Add endpoint</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Name</th><th>Phone</th><th>RingCentral</th><th>Calls</th><th></th></tr></thead>
+        <tbody id="epRows"></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section id="tab-calls" hidden>
+    <div class="panel">
+      <div class="toolbar"><h2>Active calls</h2></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Endpoint</th><th>Direction</th><th>From → To</th><th>State</th><th>Duration</th><th>Media</th></tr></thead>
+        <tbody id="callRows"></tbody>
+      </table></div>
+    </div>
+    <div class="panel">
+      <div class="toolbar"><h2>Recent calls</h2></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Ended</th><th>Endpoint</th><th>Direction</th><th>From → To</th><th>Duration</th><th>Result</th></tr></thead>
+        <tbody id="histRows"></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section id="tab-settings" hidden>
+    <form id="settingsForm" class="panel">
+      <div class="toolbar"><h2>Settings</h2></div>
+      <fieldset><legend>Network</legend><div class="grid">
+        <label>LAN IP advertised to phones<input name="lan_ip" placeholder="auto-detect"><span class="hint">Blank = auto-detect</span></label>
+        <label>Public IP for RingCentral media<input name="public_ip" placeholder="auto (learned from RingCentral)"><span class="hint">Blank = use NAT address reported by RingCentral</span></label>
+        <label>SIP UDP port (phones)<input name="sip_port" type="number" min="1" max="65535"></label>
+        <label>RTP port range start<input name="rtp_port_min" type="number"></label>
+        <label>RTP port range end<input name="rtp_port_max" type="number"></label>
+      </div></fieldset>
+      <fieldset><legend>Phones</legend><div class="grid">
+        <label>Authentication realm<input name="realm"></label>
+        <label>Max registration expiry (s)<input name="phone_max_expires" type="number"></label>
+        <label>Min registration expiry (s)<input name="phone_min_expires" type="number"></label>
+        <label>OPTIONS ping interval (s)<input name="options_interval" type="number" min="5"></label>
+        <label>Missed OPTIONS before offline<input name="options_max_failures" type="number" min="1"></label>
+      </div></fieldset>
+      <fieldset><legend>RingCentral</legend><div class="grid">
+        <label>Registration expiry (s)<input name="rc_register_expires" type="number" min="60"></label>
+        <label class="check"><input type="checkbox" name="tls_verify"> Verify TLS certificates</label>
+      </div></fieldset>
+      <fieldset><legend>Diagnostics</legend><div class="grid">
+        <label>Log level<select name="log_level"><option>DEBUG</option><option>INFO</option><option>WARNING</option></select></label>
+        <label class="check"><input type="checkbox" name="sip_trace"> Log full SIP messages</label>
+      </div></fieldset>
+      <div class="error" id="settingsErr"></div>
+      <div class="form-actions"><button class="btn" type="submit">Save settings</button></div>
+    </form>
+    <form id="pwForm" class="panel">
+      <div class="toolbar"><h2>Admin password</h2></div>
+      <div class="grid">
+        <label>Current password<input type="password" name="current" autocomplete="current-password"></label>
+        <label>New password<input type="password" name="new" minlength="8" autocomplete="new-password"></label>
+      </div>
+      <div class="error" id="pwErr"></div>
+      <div class="form-actions"><button class="btn" type="submit">Change password</button></div>
+    </form>
+  </section>
+
+  <section id="tab-logs" hidden>
+    <div class="panel">
+      <div class="toolbar"><h2>Logs</h2>
+        <div class="actions"><label class="check"><input type="checkbox" id="logFollow" checked> Follow</label>
+        <button class="btn secondary small" id="logClear">Clear view</button></div></div>
+      <div id="logs"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="epDialog">
+  <form id="epForm" method="dialog">
+    <h3 id="epTitle">Endpoint</h3>
+    <fieldset><legend>General</legend><div class="grid">
+      <label>Name<input name="name" placeholder="e.g. Front desk"></label>
+      <label class="check"><input type="checkbox" name="enabled" checked> Enabled</label>
+    </div></fieldset>
+    <fieldset><legend>Phone → proxy credentials</legend>
+      <div class="hint" style="margin-bottom:8px">The UDP phone registers to this proxy with these.</div>
+      <div class="grid">
+        <label>Phone username<input name="phone_username" required pattern="[A-Za-z0-9_.\-+]+"></label>
+        <label>Phone password<input name="phone_password" type="password" autocomplete="new-password"><span class="hint" data-edit-hint>Leave blank to keep current</span></label>
+      </div>
+      <div style="margin-top:8px"><button type="button" class="btn secondary small" id="genPw">Generate password</button></div>
+    </fieldset>
+    <fieldset><legend>RingCentral device credentials</legend><div class="grid">
+      <label>SIP domain<input name="rc_sip_domain" required placeholder="sip.ringcentral.com"></label>
+      <label>Outbound proxy<input name="rc_outbound_proxy" required placeholder="sip10.ringcentral.com:5096"></label>
+      <label>User name<input name="rc_username" required autocomplete="off"></label>
+      <label>Password<input name="rc_password" type="password" autocomplete="new-password"><span class="hint" data-edit-hint>Leave blank to keep current</span></label>
+      <label>Authorization ID<input name="rc_auth_id" required autocomplete="off"></label>
+      <label>Transport<select name="rc_transport"><option value="tls">TLS (1.2+)</option><option value="tcp">TCP</option></select></label>
+      <label>Media encryption to RingCentral<select name="srtp"><option value="off">RTP (unencrypted)</option><option value="sdes">SRTP (SDES)</option></select><span class="hint">Incoming SRTP offers are always accepted</span></label>
+    </div></fieldset>
+    <div class="error" id="epErr"></div>
+    <div class="form-actions">
+      <button type="button" class="btn secondary" id="epCancel">Cancel</button>
+      <button type="submit" class="btn">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirmDialog">
+  <form method="dialog">
+    <h3 id="confirmText"></h3>
+    <div class="form-actions">
+      <button value="cancel" class="btn secondary">Cancel</button>
+      <button value="ok" class="btn danger">Delete</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let endpoints = [], status = null, editing = null, logSince = 0, tab = "endpoints";
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {...opts, headers: {"Content-Type": "application/json", "X-Requested-With": "rcproxy", ...(opts.headers || {})}});
+  if (r.status === 401) { location.reload(); throw new Error("auth"); }
+  const data = r.headers.get("content-type")?.includes("json") ? await r.json() : await r.text();
+  if (!r.ok) throw new Error(data.error || data || r.statusText);
+  return data;
+}
+
+function showTab(name) {
+  tab = name;
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll("main > section").forEach(s => s.hidden = s.id !== "tab-" + name);
+  if (name === "settings") loadSettings();
+  if (name === "logs") pollLogs();
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+const fmtDur = s => { s = Math.max(0, s|0); const h = s/3600|0, m = (s%3600)/60|0, x = s%60; return (h ? h + ":" + String(m).padStart(2,"0") : m) + ":" + String(x).padStart(2,"0"); };
+function rcPill(rc) {
+  const map = {registered: "ok", registering: "warn", connecting: "warn", error: "bad", disconnected: "bad", idle: "idle"};
+  return `<span class="pill ${map[rc.state] || "idle"}">${esc(rc.state)}</span>`;
+}
+
+function renderEndpoints() {
+  const tb = $("#epRows");
+  if (!endpoints.length) { tb.innerHTML = `<tr><td colspan="5" class="empty">No endpoints yet. Add one with the credentials RingCentral provided for the device.</td></tr>`; return; }
+  tb.innerHTML = endpoints.map(ep => {
+    const st = status?.endpoints?.[ep.id];
+    const ph = st?.phone, rc = st?.rc;
+    let phoneCell = `<span class="pill idle">offline</span>`;
+    if (!ep.enabled) phoneCell = `<span class="pill idle">disabled</span>`;
+    else if (ph?.online) {
+      const warn = ph.options_failures > 0;
+      phoneCell = `<span class="pill ${warn ? "warn" : "ok"}">${warn ? "not answering" : "online"}</span>
+        <div class="sub mono">${esc(ph.address)}</div>
+        <div class="sub">${esc(ph.user_agent || "")}</div>
+        <div class="sub">expires in ${ph.expires_in}s${ph.options_rtt_ms != null ? ` · OPTIONS ${ph.options_rtt_ms} ms` : ""}${warn ? ` · ${ph.options_failures} missed` : ""}</div>`;
+    } else if (ph?.offline_reason) phoneCell += `<div class="sub">${esc(ph.offline_reason)}</div>`;
+    let rcCell = rc ? rcPill(rc) : "";
+    if (rc?.state === "registered") rcCell += `<div class="sub mono">${esc(rc.transport)} ${esc(rc.local)} → ${esc(rc.remote)}</div><div class="sub">public IP ${esc(rc.public_ip)} · refresh in ${rc.expires_in}s</div>`;
+    if (rc?.error) rcCell += `<div class="sub" style="color:var(--bad)">${esc(rc.error)}</div>`;
+    if (rc?.state === "idle" && ep.enabled) rcCell += `<div class="sub">waiting for phone</div>`;
+    return `<tr>
+      <td><strong>${esc(ep.name || ep.phone_username)}</strong>
+        <div class="sub">phone user <span class="mono">${esc(ep.phone_username)}</span></div>
+        <div class="sub">RC user <span class="mono">${esc(ep.rc_username)}</span> via <span class="mono">${esc(ep.rc_outbound_proxy)}</span> (${esc(ep.rc_transport.toUpperCase())}${ep.srtp === "sdes" ? ", SRTP" : ""})</div></td>
+      <td>${phoneCell}</td><td>${rcCell}</td><td>${st?.calls ?? 0}</td>
+      <td><div class="actions">
+        <button class="btn secondary small" data-edit="${ep.id}">Edit</button>
+        <button class="btn secondary small" data-rereg="${ep.id}" title="Drop and re-establish the RingCentral registration">Re-register</button>
+        <button class="btn secondary small" data-del="${ep.id}">Delete</button></div></td></tr>`;
+  }).join("");
+}
+
+function renderCalls() {
+  const calls = status?.calls || [];
+  $("#callRows").innerHTML = calls.length ? calls.map(c => {
+    const m = c.media?.[0];
+    return `<tr><td>${esc(c.endpoint)}</td><td>${c.direction === "inbound" ? "← inbound" : "→ outbound"}</td>
+      <td class="mono">${esc(c.caller)} → ${esc(c.callee)}</td>
+      <td><span class="pill ${c.state === "confirmed" ? "ok" : "warn"}">${esc(c.state === "confirmed" ? "connected" : c.state)}</span></td>
+      <td>${c.duration ? fmtDur(c.duration) : ""}</td>
+      <td class="sub mono">${m ? `phone ${m.from_phone} pkts / RC ${m.from_rc} pkts${c.srtp ? " · SRTP" : ""}${m.srtp_errors ? ` · ${m.srtp_errors} SRTP errors` : ""}` : ""}</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty">No active calls</td></tr>`;
+  const hist = status?.history || [];
+  $("#histRows").innerHTML = hist.length ? hist.map(c => `<tr>
+      <td class="sub">${new Date((c.started + 0) * 1000).toLocaleString()}</td><td>${esc(c.endpoint)}</td>
+      <td>${c.direction}</td><td class="mono">${esc(c.caller)} → ${esc(c.callee)}</td>
+      <td>${c.duration ? fmtDur(c.duration) : "–"}</td><td class="sub">${esc(c.end_reason)}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="empty">No calls yet</td></tr>`;
+}
+
+async function refresh() {
+  try {
+    [status, endpoints] = await Promise.all([api("/api/status"), api("/api/endpoints")]);
+    $("#ver").textContent = "v" + status.version;
+    $("#pwbanner").hidden = !status.default_password;
+    $("#phonehint").innerHTML = `Point phones at <span class="mono">${esc(status.lan_ip)}:${status.sip_port}</span> (UDP) using each endpoint's phone username and password.`;
+    renderEndpoints(); renderCalls();
+  } catch (e) { console.error(e); }
+}
+
+// ----- endpoint dialog
+const epForm = $("#epForm"), epDialog = $("#epDialog");
+function openEndpoint(ep) {
+  editing = ep;
+  epForm.reset();
+  $("#epErr").textContent = "";
+  $("#epTitle").textContent = ep ? "Edit endpoint" : "Add endpoint";
+  document.querySelectorAll("[data-edit-hint]").forEach(h => h.hidden = !ep);
+  const d = ep || {enabled: true, rc_sip_domain: "sip.ringcentral.com", rc_transport: "tls", srtp: "off"};
+  for (const el of epForm.elements) {
+    if (!el.name) continue;
+    if (el.type === "checkbox") el.checked = !!d[el.name];
+    else if (d[el.name] !== undefined) el.value = d[el.name];
+  }
+  epForm.phone_password.required = epForm.rc_password.required = !ep;
+  epDialog.showModal();
+}
+$("#addBtn").onclick = () => openEndpoint(null);
+$("#epCancel").onclick = () => epDialog.close();
+$("#genPw").onclick = () => {
+  const a = new Uint8Array(12); crypto.getRandomValues(a);
+  const pw = Array.from(a, b => "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"[b % 56]).join("");
+  epForm.phone_password.type = "text"; epForm.phone_password.value = pw;
+};
+epForm.onsubmit = async ev => {
+  ev.preventDefault();
+  const body = {};
+  for (const el of epForm.elements) if (el.name) body[el.name] = el.type === "checkbox" ? el.checked : el.value.trim();
+  try {
+    if (editing) await api(`/api/endpoints/${editing.id}`, {method: "PUT", body: JSON.stringify(body)});
+    else await api("/api/endpoints", {method: "POST", body: JSON.stringify(body)});
+    epForm.phone_password.type = "password";
+    epDialog.close(); refresh();
+  } catch (e) { $("#epErr").textContent = e.message; }
+};
+$("#epRows").onclick = async ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  if (b.dataset.edit) openEndpoint(await api(`/api/endpoints/${b.dataset.edit}?reveal=1`));
+  if (b.dataset.rereg) { await api(`/api/endpoints/${b.dataset.rereg}/reregister`, {method: "POST"}); refresh(); }
+  if (b.dataset.del) {
+    const ep = endpoints.find(e => e.id === b.dataset.del);
+    $("#confirmText").textContent = `Delete endpoint "${ep.name || ep.phone_username}"? Its RingCentral registration and calls will be dropped.`;
+    const dlg = $("#confirmDialog");
+    dlg.returnValue = ""; dlg.showModal();
+    dlg.onclose = async () => { if (dlg.returnValue === "ok") { await api(`/api/endpoints/${ep.id}`, {method: "DELETE"}); refresh(); } };
+  }
+};
+
+// ----- settings
+const sForm = $("#settingsForm");
+async function loadSettings() {
+  const s = await api("/api/settings");
+  for (const el of sForm.elements) {
+    if (!el.name) continue;
+    if (el.type === "checkbox") el.checked = !!s[el.name]; else el.value = s[el.name] ?? "";
+  }
+}
+sForm.onsubmit = async ev => {
+  ev.preventDefault();
+  const body = {};
+  for (const el of sForm.elements) if (el.name) body[el.name] = el.type === "checkbox" ? el.checked : (el.type === "number" ? Number(el.value) : el.value.trim());
+  try { await api("/api/settings", {method: "PUT", body: JSON.stringify(body)}); $("#settingsErr").textContent = ""; loadSettings(); refresh(); }
+  catch (e) { $("#settingsErr").textContent = e.message; }
+};
+$("#pwForm").onsubmit = async ev => {
+  ev.preventDefault();
+  const f = ev.target;
+  try { await api("/api/password", {method: "POST", body: JSON.stringify({current: f.current.value, new: f.new.value})});
+    $("#pwErr").textContent = ""; alert("Password changed. Your browser will ask you to log in again."); location.reload(); }
+  catch (e) { $("#pwErr").textContent = e.message; }
+};
+
+// ----- logs
+async function pollLogs() {
+  if (tab !== "logs") return;
+  try {
+    const rows = await api(`/api/logs?since=${logSince}`);
+    if (rows.length) {
+      const box = $("#logs");
+      const frag = document.createDocumentFragment();
+      for (const r of rows) {
+        logSince = r.id;
+        const div = document.createElement("div");
+        div.className = r.level;
+        div.textContent = `${new Date(r.ts * 1000).toLocaleTimeString()} ${r.level.padEnd(7)} ${r.msg}`;
+        frag.appendChild(div);
+      }
+      box.appendChild(frag);
+      while (box.childNodes.length > 3000) box.removeChild(box.firstChild);
+      if ($("#logFollow").checked) box.scrollTop = box.scrollHeight;
+    }
+  } catch (e) { console.error(e); }
+}
+$("#logClear").onclick = () => $("#logs").textContent = "";
+
+refresh();
+setInterval(refresh, 2000);
+setInterval(pollLogs, 1500);
+</script>
+</body>
+</html>

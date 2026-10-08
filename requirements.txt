@@ -1,0 +1,2 @@
+aiohttp==3.14.4
+pylibsrtp==1.0.0

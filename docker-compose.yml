@@ -1,0 +1,16 @@
+services:
+  rc-udp-proxy:
+    build: .
+    image: rc-udp-proxy:latest
+    container_name: rc-udp-proxy
+    # Host networking avoids Docker NAT in front of SIP/RTP and the need to
+    # publish a large UDP port range.
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    environment:
+      # Initial web UI password (only used on first start; change it in the UI)
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - WEB_PORT=${WEB_PORT:-8080}
+      - TZ=${TZ:-UTC}
