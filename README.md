@@ -69,21 +69,58 @@ UDP port range has to be published.
 
 ## Install and run
 
+### Quick install (Debian 12 or 13)
+
+On a fresh Debian machine, as root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thedayowl/RC-Udp-Proxy/main/install.sh | bash
+```
+
+The installer:
+
+* installs git, curl and Docker Engine with the compose plugin (from Docker's
+  apt repository),
+* clones this repository into `/opt/rc-udp-proxy`,
+* builds the image and starts the container,
+* prints the web UI address when it's done.
+
+On a terminal it asks for the web UI admin password. When it runs unattended it
+generates one and prints it. **Re-run the same command to update** to the latest
+code; your configuration is kept.
+
+You can override these environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `INSTALL_DIR` | `/opt/rc-udp-proxy` | Install location |
+| `BRANCH` | `main` | Branch to deploy |
+| `ADMIN_PASSWORD` | prompt / generated | Initial web UI password |
+| `WEB_PORT` | `8080` | Web UI port |
+
+Example: `curl -fsSL …/install.sh | ADMIN_PASSWORD='s3cret-pass' bash`
+
+### Manual install
+
 Requirements: Docker Engine with the compose plugin.
 
 ```bash
-git clone git@github.com:thedayowl/RC-Udp-Proxy.git
+git clone https://github.com/thedayowl/RC-Udp-Proxy.git
 cd RC-Udp-Proxy
 ADMIN_PASSWORD='choose-a-password' docker compose up -d --build
 docker compose logs -f
 ```
 
+Upgrade with `git pull && docker compose up -d --build`.
+
+### After installing
+
 * Web UI: `http://<host-ip>:8080/` (user `admin`). `ADMIN_PASSWORD` only sets the
-  password on first start. After that, change it under *Settings*. If it isn't set,
-  the password is `admin` and the UI shows a warning until you change it.
-* Configuration is stored in `./data/config.json` with mode 0600. It contains SIP
-  passwords, so protect and back up this directory.
-* Upgrade: `git pull && docker compose up -d --build`.
+  password on first start. After that, change it under *Settings*. With a manual
+  install where it isn't set, the password is `admin` and the UI shows a warning
+  until you change it.
+* Configuration is stored in `data/config.json` (under the install directory) with
+  mode 0600. It contains SIP passwords, so protect and back up this directory.
 
 ## Configure an endpoint
 
