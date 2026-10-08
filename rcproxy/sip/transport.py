@@ -62,6 +62,9 @@ class UdpTransport(asyncio.DatagramProtocol):
 def make_ssl_context(verify: bool) -> ssl.SSLContext:
     ctx = ssl.create_default_context()
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    # RingCentral SBCs prefer finite-field DHE with parameters that OpenSSL 3
+    # rejects (DH_KEY_TOO_SMALL); excluding DHE makes them choose RSA/ECDHE.
+    ctx.set_ciphers("DEFAULT:!kDHE")
     if not verify:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE

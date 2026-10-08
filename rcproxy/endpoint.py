@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
+import ssl
 import time
 
 from .config import Endpoint
@@ -321,8 +323,17 @@ class EndpointRuntime:
         host, port = cfg.proxy_hostport()
         self.rc_state = "connecting"
         conn = StreamConnection(self.label, self._on_rc_message, self._on_rc_closed)
-        await conn.open(host, port, tls=cfg.rc_transport == "tls",
-                        verify=self.core.settings.tls_verify)
+        try:
+            await conn.open(host, port, tls=cfg.rc_transport == "tls",
+                            verify=self.core.settings.tls_verify)
+        except socket.gaierror:
+            raise RegistrationError(f"cannot resolve outbound proxy host '{host}'") from None
+        except asyncio.TimeoutError:
+            raise RegistrationError(f"timeout connecting to {host}:{port}") from None
+        except ssl.SSLError as e:
+            raise RegistrationError(f"TLS error with {host}:{port}: {e.reason or e}") from None
+        except OSError as e:
+            raise RegistrationError(f"cannot connect to {host}:{port}: {e.strerror or e}") from None
         self.rc_conn = conn
         self.rc_layer = TransactionLayer(conn, self._on_rc_request, self.label,
                                          self.core.user_agent)
